@@ -1,0 +1,285 @@
+# CortexGuard
+
+## Product Requirements Document (PRD) — Version 1.0
+
+### 1. Project Overview
+
+**Project Name:** CortexGuard
+
+**Project Title:** AI-Assisted Embedded Firmware Runtime Diagnostics and Security Framework for ARM Cortex-M Systems
+
+**Project Type:** Embedded Hardware + Firmware + PC Diagnostics Platform
+
+**Target Platform:** ARM Cortex-M based microcontroller
+
+**Primary Development Platform:** STM32
+
+**Target Completion Date:** 9 October 2026
+
+### 2. Problem Statement
+
+Embedded firmware failures can occur due to excessive CPU utilization, stack overflow, heap exhaustion, invalid memory access, RTOS task abnormalities, unexpected faults, and firmware integrity problems.
+
+Conventional debugging often requires engineers to connect debugging tools, inspect registers and memory, analyze logs, reproduce failures, and manually correlate multiple sources of information.
+
+CortexGuard aims to provide a unified platform for runtime monitoring, fault-context collection, firmware integrity verification, historical performance analysis, trend forecasting, and diagnostic reporting.
+
+### 3. Target Users
+
+#### Primary User
+
+Embedded firmware and system engineers developing and validating ARM Cortex-M based embedded applications.
+
+#### Secondary Users
+
+* Embedded test and validation engineers
+* RTOS developers
+* Embedded system developers
+* Researchers and students working with ARM Cortex-M systems
+
+### 4. Product Objective
+
+CortexGuard shall monitor an ARM Cortex-M embedded application during runtime and provide engineers with a unified view of system health, performance, faults, security status, historical behavior, and diagnostic findings.
+
+### 5. Product Scope
+
+CortexGuard consists of:
+
+1. STM32 embedded firmware
+2. Runtime monitoring agent
+3. Embedded-to-PC communication layer
+4. PC diagnostic dashboard
+5. Historical telemetry database
+6. Fault and event management
+7. Firmware integrity verification
+8. Trend and anomaly analysis
+9. Diagnostic report generation
+
+### 6. Core Functional Requirements
+
+#### FR-01 — Device Communication
+
+The system shall establish communication between the STM32 target and the PC application using USB or UART.
+
+#### FR-02 — CPU Monitoring
+
+The system shall measure and display CPU utilization during runtime.
+
+#### FR-03 — RAM Monitoring
+
+The system shall measure and display RAM utilization.
+
+#### FR-04 — Heap Monitoring
+
+The system shall monitor available and/or utilized heap memory where supported by the firmware architecture.
+
+#### FR-05 — Stack Monitoring
+
+The system shall monitor stack utilization and identify potentially dangerous stack usage.
+
+#### FR-06 — RTOS Monitoring
+
+The system shall monitor selected FreeRTOS task states and resource utilization.
+
+#### FR-07 — Fault Capture
+
+The system shall capture selected Cortex-M fault information and associate available runtime context with the fault event.
+
+#### FR-08 — Runtime Dashboard
+
+The PC application shall display real-time embedded-system performance metrics.
+
+#### FR-09 — Historical Storage
+
+The system shall store runtime telemetry and fault events for later analysis.
+
+#### FR-10 — Historical Visualization
+
+The system shall provide graphical visualization of stored performance data.
+
+#### FR-11 — Firmware Integrity
+
+The system shall verify firmware integrity using an implemented integrity-check mechanism.
+
+#### FR-12 — Diagnostic Report
+
+The system shall generate an industrial-style diagnostic report containing system health, performance, fault, security, and analysis information.
+
+#### FR-13 — PDF Export
+
+The system shall allow the user to generate and save the diagnostic report as a PDF.
+
+### 7. Advanced Functional Requirements
+
+#### AR-01 — Anomaly Detection
+
+The system may identify abnormal runtime behavior using statistical or machine-learning techniques.
+
+#### AR-02 — Trend Forecasting
+
+The system may estimate future trends in selected resource-utilization parameters using historical telemetry.
+
+Supported analysis periods shall include:
+
+* 1 month
+* 3 months
+* 6 months
+* 1 year
+
+Forecasts shall be presented as trend estimates rather than guaranteed future behavior.
+
+#### AR-03 — Probable Root-Cause Analysis
+
+The system may correlate multiple runtime indicators and fault events to provide a probable root-cause assessment.
+
+#### AR-04 — Diagnostic Recommendations
+
+The system may provide recommended areas for engineering investigation based on detected abnormalities.
+
+### 8. Dashboard Requirements
+
+The dashboard shall provide the following major views:
+
+#### Live Monitoring
+
+* CPU utilization
+* RAM utilization
+* Heap status
+* Stack utilization
+* RTOS task information
+* System status
+* Active warnings
+
+#### Historical Analysis
+
+* Time-series graphs
+* User-selectable time periods
+* Performance trends
+* Fault history
+
+#### Forecasting
+
+* Resource-utilization trend
+* Forecast period
+* Current value
+* Estimated future trend
+* Warning when a projected threshold may be approached
+
+#### Fault Analysis
+
+* Fault type
+* Timestamp
+* Active task, where available
+* Processor/fault context, where available
+* Related runtime metrics
+
+#### Security
+
+* Firmware version
+* Integrity status
+* Verification result
+* Security events
+
+#### Reporting
+
+* Generate diagnostic report
+* Export report as PDF
+
+### 9. Data Requirements
+
+The telemetry system should support fields including:
+
+* Timestamp
+* CPU utilization
+* RAM utilization
+* Heap information
+* Stack information
+* Task identifier
+* Task state
+* Task CPU utilization, where implemented
+* Fault information
+* Firmware integrity status
+* System status
+
+### 10. Proposed Technology Stack
+
+#### Embedded
+
+* STM32 ARM Cortex-M
+* Embedded C
+* FreeRTOS
+* STM32CubeIDE
+* USB CDC and/or UART
+
+#### PC Application
+
+* Python
+* Plotly Dash
+* Plotly
+* SQLite
+* ReportLab
+
+#### Analytics
+
+* Python-based statistical analysis
+* scikit-learn or equivalent machine-learning tools where required
+
+### 11. Core vs Advanced Scope
+
+#### Core Features — Mandatory
+
+* STM32 firmware
+* FreeRTOS
+* CPU monitoring
+* RAM monitoring
+* Heap monitoring
+* Stack monitoring
+* RTOS task monitoring
+* Fault capture
+* PC communication
+* Real-time dashboard
+* Historical data storage
+* Historical graphs
+* Firmware integrity verification
+* PDF diagnostic report
+
+#### Advanced Features — Implement After Core Completion
+
+* Anomaly detection
+* Predictive trend analysis
+* Probable root-cause analysis
+* Automated recommendations
+* Advanced event correlation
+* CAN/RS485 support
+* Custom PCB
+
+### 12. Success Criteria
+
+The project shall be considered successfully demonstrated when the team can:
+
+1. Run a FreeRTOS-based embedded application on the STM32.
+2. Collect runtime telemetry from the target.
+3. Transfer telemetry to the PC.
+4. Display live system performance.
+5. Store and visualize historical telemetry.
+6. Detect and record controlled abnormal conditions.
+7. Capture selected Cortex-M fault information.
+8. Verify firmware integrity.
+9. Perform trend or anomaly analysis where implemented.
+10. Generate an industrial-style diagnostic report.
+11. Export the report as a PDF.
+12. Demonstrate the complete data flow from STM32 to final diagnostic output.
+
+### 13. Project Boundary
+
+CortexGuard is a development, testing, diagnostics, and research prototype.
+
+It is not intended to replace certified safety, debugging, security, or automotive/medical/aerospace development tools.
+
+Predictive analysis provides engineering trend estimates and shall not be interpreted as guaranteed future system behavior.
+
+### 14. Version Control
+
+This document represents Version 1.0 of the product requirements.
+
+Any major feature change shall be documented and reviewed by the project team before implementation.
