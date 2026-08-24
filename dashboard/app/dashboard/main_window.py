@@ -1,3 +1,4 @@
+from datetime import datetime
 from PySide6.QtCore import Qt, QTimer
 from PySide6.QtWidgets import (
     QComboBox,
@@ -13,6 +14,7 @@ from PySide6.QtWidgets import (
 import pyqtgraph as pg
 
 from data_processing.telemetry_simulator import TelemetrySimulator
+from data_processing.telemetry_logger import TelemetryLogger
 from analytics.health_analyzer import HealthAnalyzer
 
 
@@ -37,6 +39,9 @@ class CortexGuardWindow(QMainWindow):
         # ===== CortexGuard Components =====
         self.telemetry_simulator = TelemetrySimulator()
         self.health_analyzer = HealthAnalyzer()
+
+        self.telemetry_logger = None
+        self.is_recording = False
 
         self.build_dashboard()
         self.start_simulation()
@@ -74,6 +79,8 @@ class CortexGuardWindow(QMainWindow):
             "CPU_FAULT",
             "MEMORY_FAULT",
             "STACK_FAULT",
+            "TIMING_FAULT",
+            "APPLICATION_FAULT",
         ])
 
         self.mode_selector.currentTextChanged.connect(
@@ -98,6 +105,14 @@ class CortexGuardWindow(QMainWindow):
         )
 
         main_layout.addWidget(self.reset_button)
+
+        self.record_button = QPushButton("START RECORDING")
+
+        self.record_button.clicked.connect(
+            self.toggle_recording
+        )
+
+        main_layout.addWidget(self.record_button)
 
         # =====================================================
         # System Status
@@ -205,7 +220,6 @@ class CortexGuardWindow(QMainWindow):
             name="Temperature"
         )
 
-
         # =====================================================
         # Current Graph
         # =====================================================
@@ -230,7 +244,6 @@ class CortexGuardWindow(QMainWindow):
         self.current_curve = self.current_graph.plot(
             name="Current"
         )
-
 
         # =====================================================
         # Speed Graph
@@ -302,6 +315,41 @@ class CortexGuardWindow(QMainWindow):
     # Simulation
     # =========================================================
 
+    def get_dataset_path(self):
+        mode = self.telemetry_simulator.mode
+
+        dataset_paths = {
+            "NORMAL": "datasets/normal.csv",
+            "CPU_FAULT": "datasets/cpu_fault.csv",
+            "MEMORY_FAULT": "datasets/memory_fault.csv",
+            "STACK_FAULT": "datasets/stack_fault.csv",
+            "TIMING_FAULT": "datasets/timing_fault.csv",
+            "APPLICATION_FAULT": "datasets/application_fault.csv",
+        }
+
+        return dataset_paths.get(
+            mode,
+            "datasets/unknown.csv",
+        )
+
+    def toggle_recording(self):
+        if self.is_recording:
+            self.is_recording = False
+            self.record_button.setText("START RECORDING")
+            self.telemetry_logger = None
+
+        else:
+            dataset_path = self.get_dataset_path()
+
+            self.telemetry_logger = TelemetryLogger(
+                dataset_path
+            )
+
+            self.telemetry_logger.initialize_file()
+
+            self.is_recording = True
+            self.record_button.setText("STOP RECORDING")
+
     def toggle_monitoring(self):
         if self.timer.isActive():
             self.timer.stop()
@@ -342,6 +390,17 @@ class CortexGuardWindow(QMainWindow):
 
     def update_simulated_telemetry(self):
         sample = self.telemetry_simulator.generate_sample()
+
+        sample["timestamp"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        sample["mode"] = self.telemetry_simulator.mode
+
+        if self.telemetry_simulator.mode == "NORMAL":
+            sample["label"] = "NORMAL"
+        else:
+            sample["label"] = "FAULT"
+
+        if self.is_recording:
+            self.telemetry_logger.log_sample(sample)
 
         analysis = self.health_analyzer.analyze(sample)
 

@@ -53,6 +53,30 @@ class TelemetrySimulator:
                 "current": round(random.uniform(1.0, 2.7), 2),
                 "speed": random.randint(1380, 1600),
             }
+       
+        elif self.mode == "TIMING_FAULT":
+            return {
+                "cpu": random.randint(45, 75),
+                "ram": random.randint(35, 70),
+                "stack": random.randint(30, 65),
+                "heap": random.randint(25, 55),
+
+                "temperature": random.randint(40, 60),
+                "current": round(random.uniform(1.2, 2.8), 2),
+                "speed": random.randint(1200, 1450),
+            } 
+
+        elif self.mode == "APPLICATION_FAULT":
+            return {
+                "cpu": random.randint(25, 60),
+                "ram": random.randint(30, 65),
+                "stack": random.randint(25, 55),
+                "heap": random.randint(25, 60),
+
+                "temperature": random.randint(65, 90),
+                "current": round(random.uniform(3.0, 5.0), 2),
+                "speed": random.randint(700, 1200),
+            }
 
         else:
             return {
