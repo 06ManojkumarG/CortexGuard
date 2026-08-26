@@ -12,11 +12,13 @@ from PySide6.QtWidgets import (
 )
 
 import pyqtgraph as pg
+import pandas as pd
 
 from data_processing.telemetry_simulator import TelemetrySimulator
 from data_processing.telemetry_logger import TelemetryLogger
 from analytics.health_analyzer import HealthAnalyzer
-
+from ai.inference.ai_engine import AIEngine
+from ai.training.window_features import build_window_features
 
 class CortexGuardWindow(QMainWindow):
     def __init__(self):
@@ -24,7 +26,7 @@ class CortexGuardWindow(QMainWindow):
 
         self.setWindowTitle("CortexGuard")
         self.resize(1200, 750)
-
+    
         # ===== Telemetry Data Storage =====
         self.cpu_data = []
         self.ram_data = []
@@ -33,18 +35,85 @@ class CortexGuardWindow(QMainWindow):
         self.temperature_data = []
         self.current_data = []
         self.speed_data = []
+        self.ai_window = []
+        self.ai_window_size = 5
 
         self.max_points = 60
 
         # ===== CortexGuard Components =====
         self.telemetry_simulator = TelemetrySimulator()
         self.health_analyzer = HealthAnalyzer()
+        self.ai_engine = AIEngine()
 
         self.telemetry_logger = None
         self.is_recording = False
 
         self.build_dashboard()
         self.start_simulation()
+
+    def get_unified_ai_status(
+        self,
+        current_prediction,
+        future_prediction,
+    ):
+        if current_prediction == "FAULT":
+            return "FAULT"
+
+        if future_prediction == "HIGH_RISK":
+            return "HIGH_RISK"
+
+        if future_prediction == "WARNING":
+            return "WARNING"
+
+        return "NORMAL"
+
+    def update_ai_status_style(self, unified_status):
+        if unified_status == "FAULT":
+            self.status_label.setText(
+                "SYSTEM STATUS: FAULT"
+            )
+
+            self.status_label.setStyleSheet(
+                "font-size: 20px;"
+                "font-weight: bold;"
+                "padding: 12px;"
+                "background-color: #ffcccc;"
+            )
+
+        elif unified_status == "HIGH_RISK":
+            self.status_label.setText(
+                "SYSTEM STATUS: HIGH RISK"
+            )
+
+            self.status_label.setStyleSheet(
+                "font-size: 20px;"
+                "font-weight: bold;"
+                "padding: 12px;"
+                "background-color: #ffe0b2;"
+            )
+
+        elif unified_status == "WARNING":
+            self.status_label.setText(
+                "SYSTEM STATUS: WARNING"
+            )
+
+            self.status_label.setStyleSheet(
+                "font-size: 20px;"
+                "font-weight: bold;"
+                "padding: 12px;"
+                "background-color: #fff9c4;"
+            )
+
+        else:
+            self.status_label.setText(
+                "SYSTEM STATUS: NORMAL"
+            )
+
+            self.status_label.setStyleSheet(
+                "font-size: 20px;"
+                "font-weight: bold;"
+                "padding: 12px;"
+            )
 
     def build_dashboard(self):
         central_widget = QWidget()
@@ -125,6 +194,54 @@ class CortexGuardWindow(QMainWindow):
         )
 
         main_layout.addWidget(self.status_label)
+
+        self.current_ai_label = QLabel(
+            "CURRENT AI STATE: WAITING"
+        )
+
+        self.current_ai_label.setAlignment(
+            Qt.AlignCenter
+        )
+
+        self.current_ai_label.setStyleSheet(
+            "font-size: 16px; font-weight: bold;"
+        )
+
+        main_layout.addWidget(
+            self.current_ai_label
+        )
+
+        self.future_risk_label = QLabel(
+            "FUTURE RISK: WAITING"
+        )
+
+        self.future_risk_label.setAlignment(
+            Qt.AlignCenter
+        )
+
+        self.future_risk_label.setStyleSheet(
+            "font-size: 16px; font-weight: bold;"
+        )
+
+        main_layout.addWidget(
+            self.future_risk_label
+        )
+
+        self.risk_confidence_label = QLabel(
+            "RISK CONFIDENCE: --"
+        )
+
+        self.risk_confidence_label.setAlignment(
+            Qt.AlignCenter
+        )
+
+        self.risk_confidence_label.setStyleSheet(
+            "font-size: 16px; font-weight: bold;"
+        )
+
+        main_layout.addWidget(
+            self.risk_confidence_label
+        )
 
         # =====================================================
         # Monitoring Cards
@@ -407,6 +524,42 @@ class CortexGuardWindow(QMainWindow):
         status = analysis["status"]
         alerts = analysis["alerts"]
 
+        current_ai_input = {
+            feature: sample[feature]
+            for feature in self.ai_engine.current_features
+        }
+
+        current_ai_result = (
+            self.ai_engine.predict_current(
+                current_ai_input
+            )
+        )
+
+        current_ai_prediction = (
+            current_ai_result["prediction"]
+        )
+
+        self.current_ai_label.setText(
+            f"CURRENT AI STATE: {current_ai_prediction}"
+        )
+
+        if current_ai_prediction == "FAULT":
+            self.current_ai_label.setStyleSheet(
+                "font-size: 16px;"
+                "font-weight: bold;"
+                "background-color: #ffcccc;"
+            )
+        else:
+            self.current_ai_label.setStyleSheet(
+                "font-size: 16px;"
+                "font-weight: bold;"
+            )
+
+        print(
+            "Current AI prediction:",
+            current_ai_prediction,
+        )
+
         # ===== Update System Status =====
 
         self.status_label.setText(
@@ -433,6 +586,99 @@ class CortexGuardWindow(QMainWindow):
         temperature = sample["temperature"]
         current = sample["current"]
         speed = sample["speed"]
+        ai_sample = {
+            "cpu": cpu,
+            "ram": ram,
+            "heap": heap,
+            "stack": stack,
+            "temperature": temperature,
+            "current": current,
+            "speed": speed,
+        }
+
+        self.ai_window.append(ai_sample)
+
+        self.ai_window = self.ai_window[
+            -self.ai_window_size:
+        ]
+        if len(self.ai_window) == self.ai_window_size:
+            window_df = pd.DataFrame(
+                self.ai_window
+            )
+
+            window_features = build_window_features(
+                window_df
+            )
+
+            future_ai_result = (
+                self.ai_engine.predict_future(
+                    window_features
+                )
+            )
+
+            future_ai_prediction = (
+                future_ai_result["prediction"]
+            )
+
+            future_probabilities = (
+                future_ai_result["probabilities"]
+            )
+
+            risk_confidence = (
+                future_probabilities.get(
+                    future_ai_prediction,
+                    0,
+                )
+                * 100
+            )
+
+            self.risk_confidence_label.setText(
+                f"RISK CONFIDENCE: {risk_confidence:.1f}%"
+            )
+
+            self.future_risk_label.setText(
+                f"FUTURE RISK: {future_ai_prediction}"
+            )
+
+            if future_ai_prediction == "HIGH_RISK":
+                self.future_risk_label.setStyleSheet(
+                    "font-size: 16px;"
+                    "font-weight: bold;"
+                    "background-color: #ffe0b2;"
+                )
+
+            elif future_ai_prediction == "WARNING":
+                self.future_risk_label.setStyleSheet(
+                    "font-size: 16px;"
+                    "font-weight: bold;"
+                    "background-color: #fff9c4;"
+                )
+
+            else:
+                self.future_risk_label.setStyleSheet(
+                    "font-size: 16px;"
+                    "font-weight: bold;"
+                )
+
+            unified_status = self.get_unified_ai_status(
+                current_ai_prediction,
+                future_ai_prediction,
+            )
+
+            self.update_ai_status_style(
+                unified_status
+            )
+
+            print(
+                "Unified AI status:",
+                unified_status,
+            )
+
+            print(
+                "Future AI prediction:",
+                future_ai_prediction,
+            )
+        
 
         # ===== Update Monitoring Cards =====
 
