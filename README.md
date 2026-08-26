@@ -24,4 +24,4 @@ Plotly Dash
 
 ## Project Status
 
-Planning Phase
+Phase 1 completed
