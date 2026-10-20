@@ -2,8 +2,10 @@
 from __future__ import annotations
 
 import csv
+import html
 import math
 import sys
+import webbrowser
 from collections import deque
 from datetime import datetime
 from pathlib import Path
@@ -39,7 +41,6 @@ class CortexGuardWindow(QMainWindow):
         self.last_packet_time: datetime | None = None
         self.serial_connected_at: datetime | None = None
 
-        # A new hardware session begins only after a valid CG packet.
         self.live_session_started = False
         self.session_number = 0
         self.session_name = "SIMULATION SESSION"
@@ -54,7 +55,6 @@ class CortexGuardWindow(QMainWindow):
         self.simulation_total_heap = 15360
         self.last_simulated_fault_mode = None
 
-        # Suppress repeated copies of the same continuously reported fault.
         self.seen_live_faults: set[tuple[str, str, str]] = set()
 
         self._build_ui()
@@ -139,8 +139,8 @@ class CortexGuardWindow(QMainWindow):
         reset.clicked.connect(self.reset_graph)
         controls.addWidget(reset)
 
-        self.record_button = QPushButton("Start telemetry report")
-        self.record_button.clicked.connect(self.toggle_recording)
+        self.record_button = QPushButton("Generate Report")
+        self.record_button.clicked.connect(self.generate_report)
         controls.addWidget(self.record_button)
 
         root.addLayout(controls)
@@ -339,10 +339,7 @@ class CortexGuardWindow(QMainWindow):
     # SESSION RESET
     # ---------------------------------------------------------
     def _clear_session_data(self, session_name: str) -> None:
-        """
-        Clear dashboard session data only.
-        Previously saved CSV reports are not deleted.
-        """
+        """Clear dashboard data without deleting previously saved reports."""
         self.session_name = session_name
 
         self.cpu_history.clear()
@@ -364,15 +361,9 @@ class CortexGuardWindow(QMainWindow):
         self.min_heap_value.setText("N/A")
         self.task_count_value.setText("N/A")
 
-        self.future_risk.setText(
-            "FUTURE RISK: WAITING FOR TELEMETRY"
-        )
-        self.risk_confidence.setText(
-            "RISK CONFIDENCE: NOT AVAILABLE"
-        )
-        self.last_update.setText(
-            "Last telemetry: waiting for first packet"
-        )
+        self.future_risk.setText("FUTURE RISK: WAITING FOR TELEMETRY")
+        self.risk_confidence.setText("RISK CONFIDENCE: NOT AVAILABLE")
+        self.last_update.setText("Last telemetry: waiting for first packet")
 
         self._update_fault_summary()
 
@@ -389,9 +380,7 @@ class CortexGuardWindow(QMainWindow):
             "FAULT": ("#7f1d1d", "#fecaca"),
         }
 
-        bg, fg = colours.get(
-            level.upper(), ("#333333", "#f3f3f3")
-        )
+        bg, fg = colours.get(level.upper(), ("#333333", "#f3f3f3"))
 
         style = (
             f"background-color:{bg};color:{fg};"
@@ -408,10 +397,8 @@ class CortexGuardWindow(QMainWindow):
 
         if sev in ("HIGH", "CRITICAL", "FAULT"):
             return "#702020"
-
         if sev in ("MEDIUM", "MODERATE", "WARNING"):
             return "#70531A"
-
         return "#28552E"
 
     def add_fault_event(
@@ -449,31 +436,20 @@ class CortexGuardWindow(QMainWindow):
 
         if sev in ("HIGH", "CRITICAL", "FAULT"):
             self.set_status_colour("HIGH")
-            self.system_label.setText(
-                "SYSTEM STATUS: FAULT DETECTED"
-            )
+            self.system_label.setText("SYSTEM STATUS: FAULT DETECTED")
         elif sev in ("MEDIUM", "MODERATE", "WARNING"):
             self.set_status_colour("MODERATE")
-            self.system_label.setText(
-                "SYSTEM STATUS: WARNING"
-            )
+            self.system_label.setText("SYSTEM STATUS: WARNING")
 
     def _update_fault_summary(self) -> None:
-        counts = {
-            "MEMORY": 0,
-            "CPU": 0,
-            "STACK": 0,
-            "TIMING": 0,
-        }
+        counts = {"MEMORY": 0, "CPU": 0, "STACK": 0, "TIMING": 0}
 
         for row in range(self.fault_table.rowCount()):
             item = self.fault_table.item(row, 1)
-
             if not item:
                 continue
 
             fault_type = item.text().upper()
-
             for key in counts:
                 if key in fault_type:
                     counts[key] += 1
@@ -501,8 +477,7 @@ class CortexGuardWindow(QMainWindow):
         else:
             row = self.task_rows[name]
 
-        # uxTaskGetStackHighWaterMark reports the minimum unused
-        # stack in StackType_t units. On STM32F446, one word is 4 bytes.
+        # STM32F446 uses 32-bit StackType_t units.
         if words <= 32:
             status = "CRITICAL — VERY LOW UNUSED STACK"
             colour = "#702020"
@@ -520,12 +495,7 @@ class CortexGuardWindow(QMainWindow):
             colour = "#28552E"
             level = "LOW"
 
-        values = [
-            name,
-            str(words),
-            str(words * 4),
-            status,
-        ]
+        values = [name, str(words), str(words * 4), status]
 
         for col, value in enumerate(values):
             item = QTableWidgetItem(value)
@@ -535,7 +505,6 @@ class CortexGuardWindow(QMainWindow):
         if name.lower() == "diagnosticstask":
             self.stack_value.setText(f"{words} words")
 
-        # Only actual firmware task reports affect the global status here.
         if not simulated and words <= 64:
             self.set_status_colour(level)
 
@@ -555,9 +524,7 @@ class CortexGuardWindow(QMainWindow):
 
     def update_live_task(self, name, words) -> None:
         try:
-            self._set_task_row(
-                str(name), int(words), simulated=False
-            )
+            self._set_task_row(str(name), int(words), simulated=False)
         except (TypeError, ValueError):
             return
 
@@ -572,14 +539,11 @@ class CortexGuardWindow(QMainWindow):
 
         for port in ports:
             self.port_combo.addItem(
-                f"{port.device} — {port.description}",
-                port.device,
+                f"{port.device} — {port.description}", port.device
             )
 
         if not ports:
-            self.port_combo.addItem(
-                "No serial ports found", ""
-            )
+            self.port_combo.addItem("No serial ports found", "")
         elif old:
             idx = self.port_combo.findData(old)
             if idx >= 0:
@@ -596,16 +560,13 @@ class CortexGuardWindow(QMainWindow):
 
         try:
             receiver = STM32SerialReceiver(
-                str(port),
-                int(self.baud_combo.currentText()),
+                str(port), int(self.baud_combo.currentText())
             )
             receiver.connect()
             self.receiver = receiver
         except Exception as exc:
             self.receiver = None
-            QMessageBox.critical(
-                self, "Connection failed", str(exc)
-            )
+            QMessageBox.critical(self, "Connection failed", str(exc))
             return
 
         self.serial_connected_at = datetime.now()
@@ -651,9 +612,7 @@ class CortexGuardWindow(QMainWindow):
         self.connection_label.setText(
             "● SIMULATION MODE — STM32 DISCONNECTED"
         )
-        self.system_label.setText(
-            "SYSTEM STATUS: SIMULATION MODE"
-        )
+        self.system_label.setText("SYSTEM STATUS: SIMULATION MODE")
         self.detail_label.setText(
             "STM32 disconnected. Generated demo telemetry is active."
         )
@@ -662,8 +621,7 @@ class CortexGuardWindow(QMainWindow):
     def toggle_pause(self) -> None:
         self.paused = not self.paused
         self.pause_button.setText(
-            "Resume monitoring" if self.paused
-            else "Pause monitoring"
+            "Resume monitoring" if self.paused else "Pause monitoring"
         )
 
     def reset_graph(self) -> None:
@@ -673,13 +631,368 @@ class CortexGuardWindow(QMainWindow):
         self.heap_curve.setData([], [])
 
     # ---------------------------------------------------------
-    # CSV TELEMETRY REPORT
+    # HTML REPORT GENERATION
+    # ---------------------------------------------------------
+    @staticmethod
+    def _html_escape(value) -> str:
+        return html.escape(str(value if value is not None else ""))
+
+    def _table_html(self, table: QTableWidget) -> str:
+        """Convert the current contents of a dashboard table to HTML."""
+        headers = []
+
+        for col in range(table.columnCount()):
+            header = table.horizontalHeaderItem(col)
+            headers.append(header.text() if header else f"Column {col + 1}")
+
+        parts = ["<table><thead><tr>"]
+
+        for header in headers:
+            parts.append(f"<th>{self._html_escape(header)}</th>")
+
+        parts.append("</tr></thead><tbody>")
+
+        if table.rowCount() == 0:
+            parts.append(
+                f'<tr><td colspan="{max(1, len(headers))}">'
+                "No records available in this session."
+                "</td></tr>"
+            )
+        else:
+            for row in range(table.rowCount()):
+                parts.append("<tr>")
+                for col in range(table.columnCount()):
+                    item = table.item(row, col)
+                    value = item.text() if item else ""
+                    parts.append(f"<td>{self._html_escape(value)}</td>")
+                parts.append("</tr>")
+
+        parts.append("</tbody></table>")
+        return "".join(parts)
+
+    @staticmethod
+    def _history_summary(values, unit: str) -> str:
+        if not values:
+            return "No retained samples"
+
+        minimum = min(values)
+        maximum = max(values)
+        average = sum(values) / len(values)
+
+        return (
+            f"Min: {minimum:.2f} {unit} | "
+            f"Max: {maximum:.2f} {unit} | "
+            f"Average: {average:.2f} {unit} | "
+            f"Samples: {len(values)}"
+        )
+
+    def generate_report(self) -> None:
+        """Generate and open an HTML snapshot of the dashboard."""
+        try:
+            # main_window.py is in dashboard/app/dashboard/.
+            project_root = Path(__file__).resolve().parents[3]
+            report_dir = project_root / "reports" / "generated"
+            report_dir.mkdir(parents=True, exist_ok=True)
+
+            created_at = datetime.now()
+            report_path = report_dir / (
+                f"CortexGuard_Report_{created_at:%Y%m%d_%H%M%S}.html"
+            )
+
+            cpu_samples = list(self.cpu_history)
+            heap_samples = list(self.heap_history)
+
+            # Keep the two history series aligned for the sample table.
+            sample_count = min(len(cpu_samples), len(heap_samples))
+            sample_rows = []
+
+            for index in range(sample_count):
+                sample_rows.append(
+                    "<tr>"
+                    f"<td>{index + 1}</td>"
+                    f"<td>{cpu_samples[index]:.2f}%</td>"
+                    f"<td>{heap_samples[index]:.2f} KB</td>"
+                    "</tr>"
+                )
+
+            if not sample_rows:
+                sample_rows.append(
+                    '<tr><td colspan="3">No retained graph samples.</td></tr>'
+                )
+
+            metric_rows = [
+                ("Session", self.session_name),
+                ("Connection", self.connection_label.text()),
+                ("System status", self.system_label.text()),
+                ("CPU usage", self.cpu_value.text()),
+                ("RAM / heap usage", self.ram_value.text()),
+                ("Free heap", self.heap_value.text()),
+                ("Minimum free heap", self.min_heap_value.text()),
+                ("Diagnostics task stack", self.stack_value.text()),
+                ("FreeRTOS task count", self.task_count_value.text()),
+                ("Rule-based risk", self.future_risk.text()),
+                ("Risk confidence", self.risk_confidence.text()),
+                ("AI state", self.ai_label.text()),
+                ("Last update", self.last_update.text()),
+                ("Fault event count", self.fault_count),
+            ]
+
+            metric_html = "".join(
+                "<tr>"
+                f"<th>{self._html_escape(name)}</th>"
+                f"<td>{self._html_escape(value)}</td>"
+                "</tr>"
+                for name, value in metric_rows
+            )
+
+            cpu_summary = self._history_summary(cpu_samples, "%")
+            heap_summary = self._history_summary(heap_samples, "KB")
+
+            task_table_html = self._table_html(self.task_table)
+            fault_table_html = self._table_html(self.fault_table)
+
+            status_text = self._html_escape(self.system_label.text())
+            session_text = self._html_escape(self.session_name)
+            created_text = created_at.strftime("%d %B %Y, %H:%M:%S")
+
+            report_html = f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CortexGuard Diagnostics Report</title>
+<style>
+    * {{ box-sizing: border-box; }}
+    body {{
+        margin: 0;
+        padding: 28px;
+        background: #f1f5f9;
+        color: #1e293b;
+        font-family: Arial, Helvetica, sans-serif;
+        line-height: 1.5;
+    }}
+    main {{
+        max-width: 1200px;
+        margin: auto;
+        background: white;
+        padding: 30px;
+        border-radius: 12px;
+        box-shadow: 0 4px 18px rgba(0,0,0,0.08);
+    }}
+    h1 {{ margin-bottom: 4px; color: #0f172a; }}
+    h2 {{
+        margin-top: 32px;
+        padding-bottom: 8px;
+        border-bottom: 2px solid #e2e8f0;
+        color: #0f172a;
+    }}
+    .subtitle {{ color: #64748b; margin-top: 0; }}
+    .status {{
+        padding: 14px;
+        margin: 18px 0;
+        background: #e2e8f0;
+        border-radius: 7px;
+        font-weight: bold;
+        overflow-wrap: anywhere;
+    }}
+    .session {{ color: #475569; overflow-wrap: anywhere; }}
+    .summary {{
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+        gap: 12px;
+        margin-top: 16px;
+    }}
+    .summary-card {{
+        padding: 15px;
+        background: #f8fafc;
+        border: 1px solid #e2e8f0;
+        border-radius: 8px;
+        overflow-wrap: anywhere;
+    }}
+    .summary-card strong {{ display: block; margin-bottom: 5px; }}
+    table {{
+        width: 100%;
+        border-collapse: collapse;
+        margin-top: 12px;
+        font-size: 14px;
+    }}
+    th, td {{
+        border: 1px solid #e2e8f0;
+        padding: 9px;
+        text-align: left;
+        overflow-wrap: anywhere;
+    }}
+    th {{ background: #eaf0f6; }}
+    tbody tr:nth-child(even) {{ background: #f8fafc; }}
+    .note {{
+        background: #fff7ed;
+        border-left: 4px solid #ea580c;
+        padding: 14px;
+        margin-top: 12px;
+    }}
+    .footer {{
+        margin-top: 35px;
+        padding-top: 14px;
+        border-top: 1px solid #e2e8f0;
+        color: #64748b;
+        font-size: 12px;
+    }}
+    @media print {{
+        body {{ padding: 0; background: white; }}
+        main {{ box-shadow: none; padding: 0; }}
+        h2 {{ break-after: avoid; }}
+        table {{ break-inside: auto; }}
+        tr {{ break-inside: avoid; }}
+    }}
+</style>
+</head>
+<body>
+<main>
+    <h1>CortexGuard</h1>
+    <p class="subtitle">STM32 / FreeRTOS Runtime Diagnostics Report</p>
+    <p class="session"><strong>Session:</strong> {session_text}</p>
+    <p class="session"><strong>Generated:</strong> {self._html_escape(created_text)}</p>
+
+    <div class="status">{status_text}</div>
+
+    <h2>1. Current System Measurements</h2>
+    <table>
+        <thead><tr><th>Parameter</th><th>Current value</th></tr></thead>
+        <tbody>{metric_html}</tbody>
+    </table>
+
+    <h2>2. Retained Telemetry History</h2>
+    <div class="summary">
+        <div class="summary-card">
+            <strong>CPU history</strong>
+            {self._html_escape(cpu_summary)}
+        </div>
+        <div class="summary-card">
+            <strong>Free heap history</strong>
+            {self._html_escape(heap_summary)}
+        </div>
+    </div>
+    <table>
+        <thead>
+            <tr><th>Sample</th><th>CPU usage</th><th>Free heap</th></tr>
+        </thead>
+        <tbody>{''.join(sample_rows)}</tbody>
+    </table>
+
+    <h2>3. FreeRTOS Task Stack Monitor</h2>
+    <p>
+        The high-water mark represents the minimum unused stack observed
+        since a task started. A smaller value indicates less stack margin.
+    </p>
+    {task_table_html}
+
+    <h2>4. Fault Events</h2>
+    <p>
+        Fault events shown below are those currently retained in the
+        dashboard session. A report generated in simulation mode may
+        contain simulated events rather than actual hardware faults.
+    </p>
+    {fault_table_html}
+
+    <h2>5. Diagnostic Interpretation</h2>
+    <ul>
+        <li>
+            <strong>CPU:</strong> High processor usage may indicate
+            excessive task execution, busy loops, or scheduling pressure.
+        </li>
+        <li>
+            <strong>Free heap:</strong> Low free heap may indicate
+            insufficient heap capacity or excessive dynamic allocation.
+            Review allocation and deallocation paths before concluding
+            that a memory leak exists.
+        </li>
+        <li>
+            <strong>Task stack:</strong> A low high-water mark indicates
+            limited unused stack. Review task stack sizing and investigate
+            possible stack overflow.
+        </li>
+        <li>
+            <strong>Timing:</strong> A timing warning should be investigated
+            using task periods, execution times, and deadline measurements.
+        </li>
+    </ul>
+
+    <div class="note">
+        <strong>Important limitations</strong>
+        <ul>
+            <li>
+                The graph retains at most 180 samples. This report does
+                not represent the complete lifetime history of the device.
+            </li>
+            <li>
+                Resetting the graph clears its retained history. Closing
+                the dashboard does not preserve these graph samples in a
+                permanent database.
+            </li>
+            <li>
+                CPU history may contain zero for packets where CPU data
+                was unavailable. Treat those samples cautiously.
+            </li>
+            <li>
+                RAM/heap values depend on the fields supplied by firmware.
+                FreeRTOS heap usage is not a measurement of all physical
+                MCU SRAM usage.
+            </li>
+            <li>
+                Risk assessment is rule-based. Unless a trained ML model
+                is explicitly connected and used, this report does not
+                claim machine-learning predictions or calibrated
+                confidence scores.
+            </li>
+            <li>
+                Task stack byte values are approximate and assume a
+                4-byte StackType_t on the STM32F446 target.
+            </li>
+        </ul>
+    </div>
+
+    <div class="footer">
+        CortexGuard | Generated locally by the desktop dashboard.
+        This report records displayed values and is not a substitute
+        for validating firmware measurements and fault thresholds.
+    </div>
+</main>
+</body>
+</html>
+"""
+
+            report_path.write_text(report_html, encoding="utf-8")
+
+            # Open the saved report in the system's default browser.
+            webbrowser.open(report_path.resolve().as_uri())
+
+            self.detail_label.setText(
+                f"Report generated: {report_path}"
+            )
+
+            QMessageBox.information(
+                self,
+                "Report generated",
+                "CortexGuard report saved successfully.\n\n"
+                f"{report_path}\n\n"
+                "The report has been opened in your default browser.",
+            )
+
+        except Exception as exc:
+            QMessageBox.critical(
+                self,
+                "Report generation failed",
+                f"Could not generate the report.\n\n{exc}",
+            )
+
+    # ---------------------------------------------------------
+    # CSV TELEMETRY LOGGING
+    # Kept for compatibility with existing logging functionality.
+    # The main UI button now generates an HTML snapshot.
     # ---------------------------------------------------------
     def toggle_recording(self) -> None:
         if not self.recording:
-            safe_session = (
-                self.session_name.lower().replace(" ", "_")
-            )
+            safe_session = self.session_name.lower().replace(" ", "_")
 
             path = Path.cwd() / (
                 f"cortexguard_{safe_session}_"
@@ -706,9 +1019,7 @@ class CortexGuardWindow(QMainWindow):
                 ])
 
             except OSError as exc:
-                QMessageBox.critical(
-                    self, "Report error", str(exc)
-                )
+                QMessageBox.critical(self, "Report error", str(exc))
                 self.csv_file = None
                 self.csv_writer = None
                 return
@@ -727,7 +1038,7 @@ class CortexGuardWindow(QMainWindow):
 
     def _stop_recording(self) -> None:
         self.recording = False
-        self.record_button.setText("Start telemetry report")
+        self.record_button.setText("Generate Report")
 
         if self.csv_file:
             try:
@@ -741,8 +1052,6 @@ class CortexGuardWindow(QMainWindow):
 
     def _log(self, row) -> None:
         if self.recording and self.csv_writer:
-            # Existing log calls supply 9 columns. Insert the session name
-            # to match the 10-column report header.
             if len(row) == 9:
                 row = [row[0], self.session_name, *row[1:]]
 
@@ -752,9 +1061,7 @@ class CortexGuardWindow(QMainWindow):
     # ---------------------------------------------------------
     # RULE-BASED RISK
     # ---------------------------------------------------------
-    def _risk(
-        self, cpu, heap, min_heap, stack_words=None
-    ) -> str:
+    def _risk(self, cpu, heap, min_heap, stack_words=None) -> str:
         if cpu is None:
             self.future_risk.setText(
                 "FUTURE RISK: WAITING FOR CPU TELEMETRY"
@@ -769,10 +1076,7 @@ class CortexGuardWindow(QMainWindow):
             cpu >= 90
             or heap < 1024
             or min_heap < 512
-            or (
-                stack_words is not None
-                and stack_words <= 32
-            )
+            or (stack_words is not None and stack_words <= 32)
         ):
             level = "HIGH"
 
@@ -780,10 +1084,7 @@ class CortexGuardWindow(QMainWindow):
             cpu >= 75
             or heap < 4096
             or min_heap < 2048
-            or (
-                stack_words is not None
-                and stack_words <= 64
-            )
+            or (stack_words is not None and stack_words <= 64)
         ):
             level = "MODERATE"
 
@@ -849,9 +1150,7 @@ class CortexGuardWindow(QMainWindow):
             )
             stack_words = 276
 
-        free_heap = max(
-            0, min(total_heap, int(free_heap))
-        )
+        free_heap = max(0, min(total_heap, int(free_heap)))
         used_heap = total_heap - free_heap
 
         self.simulated_min_heap = min(
@@ -865,9 +1164,7 @@ class CortexGuardWindow(QMainWindow):
             f"{ram_percent:.1f}% "
             f"({used_heap:,}/{total_heap:,} B)"
         )
-        self.heap_value.setText(
-            f"{free_heap / 1024:.2f} KB"
-        )
+        self.heap_value.setText(f"{free_heap / 1024:.2f} KB")
         self.min_heap_value.setText(
             f"{min_free_heap / 1024:.2f} KB"
         )
@@ -902,11 +1199,9 @@ class CortexGuardWindow(QMainWindow):
             "Last simulated update: " + now.strftime("%H:%M:%S")
         )
 
-        self._risk(
-            cpu, free_heap, min_free_heap, stack_words
-        )
+        self._risk(cpu, free_heap, min_free_heap, stack_words)
 
-        # Create one demo event on entry to a fault mode, not on every tick.
+        # Create one demo event on entry to a fault mode.
         if (
             mode != "NORMAL"
             and mode != self.last_simulated_fault_mode
@@ -933,9 +1228,7 @@ class CortexGuardWindow(QMainWindow):
             severity = (
                 "HIGH"
                 if mode in (
-                    "CPU_FAULT",
-                    "MEMORY_FAULT",
-                    "STACK_FAULT",
+                    "CPU_FAULT", "MEMORY_FAULT", "STACK_FAULT"
                 )
                 else "WARNING"
             )
@@ -943,9 +1236,7 @@ class CortexGuardWindow(QMainWindow):
             self.add_fault_event(
                 mode.replace("_FAULT", ""),
                 severity,
-                descriptions.get(
-                    mode, "Simulated diagnostic event."
-                ),
+                descriptions.get(mode, "Simulated diagnostic event."),
                 source="SIMULATION",
             )
 
@@ -967,10 +1258,6 @@ class CortexGuardWindow(QMainWindow):
     # START A FRESH HARDWARE SESSION
     # ---------------------------------------------------------
     def _start_live_session(self) -> None:
-        """
-        Called exactly once after the first valid aggregate STM32 packet.
-        Clears previous dashboard data without deleting saved CSV reports.
-        """
         if self.live_session_started:
             return
 
@@ -1003,7 +1290,6 @@ class CortexGuardWindow(QMainWindow):
         if self.paused:
             return
 
-        # Simulation is used only when no hardware serial connection is open.
         if not self.receiver:
             self.update_simulated_telemetry()
             return
@@ -1021,9 +1307,7 @@ class CortexGuardWindow(QMainWindow):
             )
             return
 
-        # Aggregate telemetry packet: CG,cpu=...,heap=...,min_heap=...
         for packet in packets:
-            # Do not clear old data for incomplete/invalid packets.
             if (
                 packet.get("heap") is None
                 or packet.get("min_heap") is None
@@ -1074,31 +1358,22 @@ class CortexGuardWindow(QMainWindow):
                 if ram_total > 0:
                     pct = 100.0 * ram_used / ram_total
                     self.ram_value.setText(
-                        f"{pct:.1f}% "
-                        f"({ram_used:,}/{ram_total:,} B)"
+                        f"{pct:.1f}% ({ram_used:,}/{ram_total:,} B)"
                     )
                 else:
                     self.ram_value.setText("N/A")
 
             else:
-                self.ram_value.setText(
-                    "N/A — RAM field missing"
-                )
+                self.ram_value.setText("N/A — RAM field missing")
 
-            self.heap_value.setText(
-                f"{heap / 1024:.2f} KB"
-            )
-            self.min_heap_value.setText(
-                f"{min_heap / 1024:.2f} KB"
-            )
+            self.heap_value.setText(f"{heap / 1024:.2f} KB")
+            self.min_heap_value.setText(f"{min_heap / 1024:.2f} KB")
 
             if task_count is not None:
                 self.task_count_value.setText(str(task_count))
 
             if stack_words is not None:
-                self.stack_value.setText(
-                    f"{stack_words} words"
-                )
+                self.stack_value.setText(f"{stack_words} words")
 
             self.cpu_history.append(
                 float(cpu) if cpu is not None else 0.0
@@ -1114,9 +1389,7 @@ class CortexGuardWindow(QMainWindow):
                 list(self.heap_history),
             )
 
-            level = self._risk(
-                cpu, heap, min_heap, stack_words
-            )
+            level = self._risk(cpu, heap, min_heap, stack_words)
 
             self.connection_label.setText(
                 "● STM32 HARDWARE MODE — LIVE DATA"
@@ -1129,8 +1402,7 @@ class CortexGuardWindow(QMainWindow):
                 "Real STM32 telemetry received over UART."
             )
             self.last_update.setText(
-                "Last hardware telemetry: "
-                + now.strftime("%H:%M:%S")
+                "Last hardware telemetry: " + now.strftime("%H:%M:%S")
             )
 
             self._log([
@@ -1145,7 +1417,6 @@ class CortexGuardWindow(QMainWindow):
                 "",
             ])
 
-        # Firmware-reported task stack high-water marks.
         for task in tasks:
             if not self.live_session_started:
                 continue
@@ -1158,37 +1429,27 @@ class CortexGuardWindow(QMainWindow):
                     task["name"], task["stack_words"]
                 )
 
-        # Firmware-reported fault events.
         for fault in faults:
             if not self.live_session_started:
                 continue
 
-            fault_type = str(
-                fault.get("type", "UNKNOWN")
-            )
-            severity = str(
-                fault.get("level", "WARNING")
-            )
+            fault_type = str(fault.get("type", "UNKNOWN"))
+            severity = str(fault.get("level", "WARNING"))
             details = str(
                 fault.get("detail", "Firmware reported a fault")
             )
 
             key = (fault_type, severity, details)
 
-            # Prevent a repeated UART line from creating duplicate table rows.
             if key in self.seen_live_faults:
                 continue
 
             self.seen_live_faults.add(key)
 
             self.add_fault_event(
-                fault_type,
-                severity,
-                details,
-                source="STM32",
+                fault_type, severity, details, source="STM32"
             )
 
-        # Hardware is connected: do not inject simulation data into its graphs.
         reference_time = (
             self.last_packet_time or self.serial_connected_at
         )
