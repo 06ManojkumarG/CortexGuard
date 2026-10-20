@@ -176,16 +176,16 @@ class CortexGuardWindow(QMainWindow):
 
         grid = QGridLayout()
 
-        self.cpu_value = self.metric(grid, 0, 0, "CPU USAGE")
-        self.ram_value = self.metric(grid, 0, 1, "RAM / HEAP USAGE")
-        self.stack_value = self.metric(
+        self.cpu_value = self.add_metric(grid, 0, 0, "CPU USAGE")
+        self.ram_value = self.add_metric(grid, 0, 1, "RAM / HEAP USAGE")
+        self.stack_value = self.add_metric(
             grid, 0, 2, "DIAGNOSTICS TASK STACK"
         )
-        self.heap_value = self.metric(grid, 1, 0, "FREE HEAP")
-        self.min_heap_value = self.metric(
+        self.heap_value = self.add_metric(grid, 1, 0, "FREE HEAP")
+        self.min_heap_value = self.add_metric(
             grid, 1, 1, "MINIMUM FREE HEAP"
         )
-        self.task_count_value = self.metric(
+        self.task_count_value = self.add_metric(
             grid, 1, 2, "FREERTOS TASK COUNT"
         )
 
@@ -321,7 +321,7 @@ class CortexGuardWindow(QMainWindow):
 
         self.set_status_colour("LOW")
 
-    def metric(self, grid, row, col, name):
+    def add_metric(self, grid, row, col, name):
         box = QGroupBox(name)
         layout = QVBoxLayout(box)
 
